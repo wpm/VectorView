@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vector View — explore linear transformations</title>
+<style>
+  :root {
+    --bg: #0e1016;
+    --panel: #161a24;
+    --panel2: #1d2230;
+    --border: #2a3042;
+    --text: #e6e9f2;
+    --muted: #8b93a7;
+    --accent: #5ba7f7;
+    --ihat: #4ade80;      /* green — first basis vector */
+    --jhat: #f87171;      /* red — second basis vector */
+    --vvec: #fbbf24;      /* amber — the sample vector v */
+    --eigen: #c084fc;     /* purple — eigenvector lines */
+    --kernel: #fb7185;    /* rose — null space */
+    --colspace: #38bdf8;  /* sky — column space */
+    --good: #4ade80;
+    --bad: #f87171;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+  }
+  /* ---------- sidebar ---------- */
+  #sidebar {
+    width: 360px; min-width: 360px; height: 100vh; overflow-y: auto;
+    background: var(--panel); border-right: 1px solid var(--border);
+    padding: 16px 16px 40px;
+  }
+  #sidebar::-webkit-scrollbar { width: 8px; }
+  #sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  header h1 { font-size: 20px; letter-spacing: .3px; }
+  header h1 span { color: var(--accent); }
+  header p { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  section { margin-top: 18px; }
+  h2 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px;
+    color: var(--muted); margin-bottom: 8px; font-weight: 600;
+  }
+  /* ---------- matrix editor ---------- */
+  #matrixRow { display: flex; align-items: center; gap: 14px; }
+  .matwrap { display: flex; align-items: stretch; }
+  .bracket { width: 8px; border: 2px solid var(--muted); }
+  .bracket.left  { border-right: none; border-radius: 4px 0 0 4px; }
+  .bracket.right { border-left: none;  border-radius: 0 4px 4px 0; }
+  .matgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 6px; }
+  .matgrid input {
+    width: 62px; padding: 6px 4px; text-align: center;
+    background: var(--panel2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    font: 15px var(--mono); outline: none;
+  }
+  .matgrid input:focus { border-color: var(--accent); }
+  .matgrid input.col1 { color: var(--ihat); }
+  .matgrid input.col2 { color: var(--jhat); }
+  #matNote { font-size: 12px; color: var(--muted); }
+  #matNote b.i { color: var(--ihat); font-weight: 600; }
+  #matNote b.j { color: var(--jhat); font-weight: 600; }
+  .btnrow { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  button {
+    background: var(--panel2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 7px;
+    padding: 5px 10px; font-size: 12.5px; cursor: pointer;
+    transition: background .15s, border-color .15s;
+  }
+  button:hover { background: #252b3d; border-color: #3a4258; }
+  button.primary { background: #1e3a5f; border-color: #2e5c96; }
+  button.primary:hover { background: #24497a; }
+  button:disabled { opacity: .4; cursor: default; }
+  /* ---------- animation ---------- */
+  #animRow { display: flex; align-items: center; gap: 10px; }
+  #tSlider { flex: 1; accent-color: var(--accent); }
+  #tLabel { font: 12px var(--mono); color: var(--muted); width: 58px; }
+  /* ---------- toggles ---------- */
+  .toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; }
+  .toggles label {
+    display: flex; align-items: center; gap: 7px; font-size: 12.5px;
+    color: var(--text); cursor: pointer; padding: 3px 2px; border-radius: 5px;
+  }
+  .toggles label:hover { background: var(--panel2); }
+  .toggles input { accent-color: var(--accent); }
+  .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  /* ---------- analysis ---------- */
+  #analysis {
+    background: var(--panel2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 12px;
+    font: 12.5px var(--mono); line-height: 1.75;
+  }
+  #analysis .lbl { color: var(--muted); }
+  #analysis .eig { color: var(--eigen); }
+  #analysis .det-pos { color: var(--good); }
+  #analysis .det-neg { color: var(--bad); }
+  #analysis .det-zero { color: var(--kernel); font-weight: 600; }
+  #analysis .warn { color: var(--kernel); }
+  /* ---------- vector panel ---------- */
+  #vecInfo {
+    background: var(--panel2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 12px;
+    font: 12.5px var(--mono); line-height: 1.75;
+  }
+  #vecInfo .lbl { color: var(--muted); }
+  #vecInfo .v { color: var(--vvec); }
+  /* ---------- tours ---------- */
+  .tourbtns { display: flex; flex-direction: column; gap: 6px; }
+  .tourbtns button { text-align: left; padding: 8px 11px; }
+  .tourbtns button .num {
+    color: var(--accent); font: 600 11px var(--mono); margin-right: 7px;
+  }
+  #tourCard {
+    display: none; margin-top: 10px; background: #14243a;
+    border: 1px solid #2e5c96; border-radius: 10px; padding: 12px 14px;
+  }
+  #tourCard.show { display: block; }
+  #tourCard h3 { font-size: 13.5px; margin-bottom: 6px; color: var(--accent); }
+  #tourCard p { font-size: 12.5px; color: #c7d3e8; margin-bottom: 6px; }
+  #tourCard p:last-child { margin-bottom: 0; }
+  #tourCard .close {
+    float: right; background: none; border: none; color: var(--muted);
+    font-size: 14px; padding: 0 2px; cursor: pointer;
+  }
+  #tourCard code { font-family: var(--mono); color: var(--vvec); font-size: 12px; }
+  /* ---------- canvas stage ---------- */
+  #stage { position: relative; flex: 1; height: 100vh; }
+  #canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+  #canvas.dragging { cursor: grabbing; }
+  #legend {
+    position: absolute; top: 12px; right: 14px;
+    background: rgba(16, 19, 28, .82); border: 1px solid var(--border);
+    border-radius: 10px; padding: 9px 12px; font-size: 12px;
+    backdrop-filter: blur(4px); pointer-events: none; line-height: 1.7;
+  }
+  #legend .row { display: flex; align-items: center; gap: 8px; }
+  #legend .chip { width: 14px; height: 4px; border-radius: 2px; }
+  #hint {
+    position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+    color: var(--muted); font-size: 12px; pointer-events: none;
+    background: rgba(16,19,28,.7); padding: 4px 12px; border-radius: 8px;
+    white-space: nowrap;
+  }
+  kbd {
+    font: 11px var(--mono); background: var(--panel2);
+    border: 1px solid var(--border); border-radius: 4px; padding: 0 4px;
+  }
+</style>
+</head>
+<body>
+<div id="sidebar">
+  <header>
+    <h1>Vector <span>View</span></h1>
+    <p>See what a matrix does to the plane.</p>
+  </header>
+
+  <section>
+    <h2>Matrix M</h2>
+    <div id="matrixRow">
+      <div class="matwrap">
+        <div class="bracket left"></div>
+        <div class="matgrid">
+          <input class="col1" id="m00" type="number" step="0.1" value="2">
+          <input class="col2" id="m01" type="number" step="0.1" value="1">
+          <input class="col1" id="m10" type="number" step="0.1" value="1">
+          <input class="col2" id="m11" type="number" step="0.1" value="2">
+        </div>
+        <div class="bracket right"></div>
+      </div>
+      <div id="matNote">columns are<br>where <b class="i">î</b> and <b class="j">ĵ</b> land</div>
+    </div>
+    <div class="btnrow">
+      <button id="btnIdentity">Identity</button>
+      <button id="btnTranspose">Transpose</button>
+      <button id="btnInverse">Invert</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Presets</h2>
+    <div class="btnrow" id="presets"></div>
+  </section>
+
+  <section>
+    <h2>Animate &nbsp;<span style="color:var(--muted);text-transform:none;letter-spacing:0">identity → M</span></h2>
+    <div id="animRow">
+      <button id="btnPlay" class="primary">▶ Play</button>
+      <input id="tSlider" type="range" min="0" max="1" step="0.001" value="1">
+      <span id="tLabel">t = 1.00</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Show</h2>
+    <div class="toggles">
+      <label><input type="checkbox" id="tgGrid" checked><span class="sw" style="background:var(--accent)"></span>transformed grid</label>
+      <label><input type="checkbox" id="tgSquare" checked><span class="sw" style="background:var(--good)"></span>unit square (det)</label>
+      <label><input type="checkbox" id="tgEigen" checked><span class="sw" style="background:var(--eigen)"></span>eigenvectors</label>
+      <label><input type="checkbox" id="tgVec" checked><span class="sw" style="background:var(--vvec)"></span>vector v and Mv</label>
+      <label><input type="checkbox" id="tgPath"><span class="sw" style="background:#e2c86a"></span>decompose Mv</label>
+      <label><input type="checkbox" id="tgCircle"><span class="sw" style="background:#7dd3fc"></span>unit circle image</label>
+      <label><input type="checkbox" id="tgKernel"><span class="sw" style="background:var(--kernel)"></span>null / column space</label>
+      <label><input type="checkbox" id="tgSnap" checked><span class="sw" style="background:var(--muted)"></span>snap to ½ grid</label>
+    </div>
+  </section>
+
+  <section>
+    <h2>Analysis</h2>
+    <div id="analysis"></div>
+  </section>
+
+  <section>
+    <h2>Vector v</h2>
+    <div id="vecInfo"></div>
+    <div class="btnrow">
+      <button id="btnIterate" title="Replace v with Mv — do it repeatedly and watch where v settles">v ← Mv (iterate)</button>
+      <button id="btnResetV">reset v</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Explore concepts</h2>
+    <div class="tourbtns" id="tourbtns"></div>
+    <div id="tourCard"></div>
+  </section>
+</div>
+
+<div id="stage">
+  <canvas id="canvas"></canvas>
+  <div id="legend"></div>
+  <div id="hint">drag <b style="color:var(--ihat)">î</b>, <b style="color:var(--jhat)">ĵ</b>, or <b style="color:var(--vvec)">v</b> · drag background to pan · scroll to zoom</div>
+</div>
+
+<script>
+"use strict";
+/* ================================================================
+   Vector View — core: linear algebra, state, rendering
+   Matrix convention: m = [a, b, c, d]  means  M = | a  b |
+                                                   | c  d |
+   Columns: M î = (a, c),  M ĵ = (b, d).
+   ================================================================ */
+
+const EPS = 1e-9;
+
+/* ---------------- tiny linear algebra toolkit ---------------- */
+const LA = {
+  apply(m, v) { return [m[0]*v[0] + m[1]*v[1], m[2]*v[0] + m[3]*v[1]]; },
+  det(m)   { return m[0]*m[3] - m[1]*m[2]; },
+  trace(m) { return m[0] + m[3]; },
+  lerpFromI(m, t) {
+    // interpolate identity -> m, entrywise
+    return [1 + (m[0]-1)*t, m[1]*t, m[2]*t, 1 + (m[3]-1)*t];
+  },
+  inverse(m) {
+    const d = LA.det(m);
+    if (Math.abs(d) < EPS) return null;
+    return [m[3]/d, -m[1]/d, -m[2]/d, m[0]/d];
+  },
+  transpose(m) { return [m[0], m[2], m[1], m[3]]; },
+  norm(v) { return Math.hypot(v[0], v[1]); },
+  normalize(v) {
+    const n = LA.norm(v);
+    return n < EPS ? [0, 0] : [v[0]/n, v[1]/n];
+  },
+  rank(m) {
+    const scale = Math.max(Math.abs(m[0]), Math.abs(m[1]), Math.abs(m[2]), Math.abs(m[3]));
+    if (scale < 1e-7) return 0;
+    return Math.abs(LA.det(m)) / (scale*scale) < 1e-6 ? 1 : 2;
+  },
+  /* eigen decomposition of a 2x2 matrix */
+  eigen(m) {
+    const [a, b, c, d] = m;
+    const tr = a + d, det = a*d - b*c;
+    const disc = tr*tr - 4*det;
+    if (disc < -1e-10) {
+      return { complex: true, re: tr/2, im: Math.sqrt(-disc)/2 };
+    }
+    const s = Math.sqrt(Math.max(disc, 0));
+    const l1 = (tr + s) / 2, l2 = (tr - s) / 2;
+    // uniform scaling M = λI : every vector is an eigenvector
+    if (Math.abs(b) < 1e-9 && Math.abs(c) < 1e-9 && Math.abs(a - d) < 1e-9) {
+      return { complex: false, uniform: true, l1: a, l2: a, vecs: [] };
+    }
+    const vecFor = (l) => {
+      // rows of (M - λI) are (a-λ, b) and (c, d-λ); eigenvector ⟂ a nonzero row
+      if (Math.abs(b) > 1e-9 || Math.abs(a - l) > 1e-9) return LA.normalize([b, l - a]);
+      return LA.normalize([l - d, c]);
+    };
+    const v1 = vecFor(l1), v2 = vecFor(l2);
+    const repeated = Math.abs(l1 - l2) < 1e-8;
+    const sameDir = Math.abs(v1[0]*v2[1] - v1[1]*v2[0]) < 1e-6;
+    if (repeated && sameDir) {
+      return { complex: false, defective: true, l1, l2, vecs: [{ l: l1, v: v1 }] };
+    }
+    return { complex: false, l1, l2, vecs: [{ l: l1, v: v1 }, { l: l2, v: v2 }] };
+  },
+  /* direction of the null space of a rank-1 matrix */
+  kernelDir(m) {
+    const [a, b, c, d] = m;
+    if (Math.hypot(a, b) > 1e-9) return LA.normalize([b, -a]);
+    if (Math.hypot(c, d) > 1e-9) return LA.normalize([d, -c]);
+    return null; // zero matrix: kernel is the whole plane
+  },
+  /* direction of the column space of a rank-1 matrix */
+  colDir(m) {
+    const c1 = [m[0], m[2]], c2 = [m[1], m[3]];
+    return LA.norm(c1) > 1e-9 ? LA.normalize(c1) : (LA.norm(c2) > 1e-9 ? LA.normalize(c2) : null);
+  },
+};
+
+/* number formatting */
+function fmt(x, dp = 2) {
+  if (!isFinite(x)) return "∞";
+  if (Math.abs(x) < 5e-11) x = 0;
+  let s = x.toFixed(dp);
+  s = s.replace(/\.?0+$/, "");
+  return s === "-0" ? "0" : s;
+}
+
+/* ---------------- state ---------------- */
+const S = {
+  m: [2, 1, 1, 2],        // target matrix
+  t: 1,                    // animation parameter, 0 = identity, 1 = M
+  playing: false,
+  v: [1, 1.5],             // sample vector
+  scale: 78,               // pixels per world unit
+  origin: null,            // screen position of world (0,0); set on first resize
+  show: { grid: true, square: true, eigen: true, vec: true, path: false, circle: false, kernel: false },
+  snap: true,
+  drag: null,              // "i" | "j" | "v" | "pan"
+};
+
+/* ---------------- canvas setup ---------------- */
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+let W = 0, H = 0, DPR = 1;
+
+function resize() {
+  DPR = window.devicePixelRatio || 1;
+  const r = canvas.getBoundingClientRect();
+  W = r.width; H = r.height;
+  canvas.width = Math.round(W * DPR);
+  canvas.height = Math.round(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  if (!S.origin) S.origin = [W * 0.5, H * 0.5];
+}
+window.addEventListener("resize", resize);
+
+const toScreen = (p) => [S.origin[0] + p[0]*S.scale, S.origin[1] - p[1]*S.scale];
+const toWorld  = (sx, sy) => [(sx - S.origin[0]) / S.scale, (S.origin[1] - sy) / S.scale];
+
+/* current interpolated matrix */
+const curM = () => LA.lerpFromI(S.m, S.t);
+
+/* ---------------- drawing helpers ---------------- */
+function line(p, q, color, width = 1, dash = null) {
+  ctx.save();
+  if (dash) ctx.setLineDash(dash);
+  ctx.strokeStyle = color; ctx.lineWidth = width;
+  ctx.beginPath();
+  ctx.moveTo(...toScreen(p)); ctx.lineTo(...toScreen(q));
+  ctx.stroke();
+  ctx.restore();
+}
+
+function arrow(from, to, color, width = 3, label = null, labelColor = null) {
+  const [x1, y1] = toScreen(from), [x2, y2] = toScreen(to);
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.hypot(dx, dy);
+  if (len < 1) return;
+  const head = Math.min(11, len * 0.4);
+  const ang = Math.atan2(dy, dx);
+  ctx.save();
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+  ctx.lineCap = "round";
+  // shaft stops where the head begins
+  const bx = x2 - head * 0.75 * Math.cos(ang), by = y2 - head * 0.75 * Math.sin(ang);
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(bx, by); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - head*Math.cos(ang - 0.42), y2 - head*Math.sin(ang - 0.42));
+  ctx.lineTo(x2 - head*Math.cos(ang + 0.42), y2 - head*Math.sin(ang + 0.42));
+  ctx.closePath(); ctx.fill();
+  if (label) {
+    ctx.font = "600 15px ui-monospace, Menlo, monospace";
+    ctx.fillStyle = labelColor || color;
+    const off = 14;
+    ctx.fillText(label, x2 + off*Math.cos(ang) - 5, y2 + off*Math.sin(ang) + 5);
+  }
+  ctx.restore();
+}
+
+function fullLine(dir, color, width = 2, dash = [7, 6]) {
+  // an infinite line through the origin along dir
+  const L = (W + H) / S.scale + 4;
+  line([-dir[0]*L, -dir[1]*L], [dir[0]*L, dir[1]*L], color, width, dash);
+}
+
+/* ---------------- render ---------------- */
+function render() {
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = "#0e1016";
+  ctx.fillRect(0, 0, W, H);
+
+  const M = curM();
+  const e1 = [M[0], M[2]], e2 = [M[1], M[3]];   // current basis images
+  const css = getComputedStyle(document.documentElement);
+  const C = (n) => css.getPropertyValue(n).trim();
+
+  drawStaticGrid();
+  if (S.show.grid) drawTransformedGrid(e1, e2);
+  drawAxes();
+
+  if (S.show.square) drawUnitSquare(e1, e2, M);
+  if (S.show.circle) drawCircleImage(M);
+  if (S.show.kernel) drawKernelAndColumnSpace();
+  if (S.show.eigen) drawEigen();
+  if (S.show.vec) drawVectors(M);
+
+  // basis vectors last so their handles sit on top
+  arrow([0, 0], e1, C("--ihat"), 3.5, "î");
+  arrow([0, 0], e2, C("--jhat"), 3.5, "ĵ");
+  handleDot(e1, C("--ihat"));
+  handleDot(e2, C("--jhat"));
+}
+
+function handleDot(p, color) {
+  const [x, y] = toScreen(p);
+  ctx.save();
+  ctx.beginPath(); ctx.arc(x, y, 6, 0, 7);
+  ctx.fillStyle = "#0e1016"; ctx.fill();
+  ctx.lineWidth = 2.5; ctx.strokeStyle = color; ctx.stroke();
+  ctx.restore();
+}
+
+function drawStaticGrid() {
+  ctx.save();
+  ctx.strokeStyle = "rgba(120,130,160,0.13)";
+  ctx.lineWidth = 1;
+  const x0 = Math.floor(toWorld(0, 0)[0]), x1 = Math.ceil(toWorld(W, 0)[0]);
+  const y1 = Math.ceil(toWorld(0, 0)[1]), y0 = Math.floor(toWorld(0, H)[1]);
+  ctx.beginPath();
+  for (let x = x0; x <= x1; x++) { const s = toScreen([x, 0])[0]; ctx.moveTo(s, 0); ctx.lineTo(s, H); }
+  for (let y = y0; y <= y1; y++) { const s = toScreen([0, y])[1]; ctx.moveTo(0, s); ctx.lineTo(W, s); }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawAxes() {
+  ctx.save();
+  ctx.strokeStyle = "rgba(180,190,215,0.35)";
+  ctx.lineWidth = 1.4;
+  const [ox, oy] = toScreen([0, 0]);
+  ctx.beginPath();
+  ctx.moveTo(0, oy); ctx.lineTo(W, oy);
+  ctx.moveTo(ox, 0); ctx.lineTo(ox, H);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawTransformedGrid(e1, e2) {
+  const n1 = LA.norm(e1), n2 = LA.norm(e2);
+  ctx.save();
+  const N = 24, L = 60; // grid line count and half-length in units
+  for (const [dir, other, n] of [[e1, e2, n2], [e2, e1, n1]]) {
+    if (LA.norm(dir) < 1e-6) continue;
+    for (let k = -N; k <= N; k++) {
+      if (n < 1e-6 && k !== 0) continue; // collapsed direction: only the line through origin survives
+      const base = [other[0]*k, other[1]*k];
+      const p = [base[0] - dir[0]*L, base[1] - dir[1]*L];
+      const q = [base[0] + dir[0]*L, base[1] + dir[1]*L];
+      const isAxis = k === 0;
+      line(p, q,
+        isAxis ? "rgba(91,167,247,0.75)" : "rgba(91,167,247,0.28)",
+        isAxis ? 1.6 : 1);
+    }
+  }
+  ctx.restore();
+}
+
+function drawUnitSquare(e1, e2, M) {
+  const det = LA.det(M);
+  const pts = [[0, 0], e1, [e1[0]+e2[0], e1[1]+e2[1]], e2].map(toScreen);
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(...pts[0]); pts.slice(1).forEach(p => ctx.lineTo(...p));
+  ctx.closePath();
+  ctx.fillStyle = det >= 0 ? "rgba(74,222,128,0.16)" : "rgba(248,113,113,0.18)";
+  ctx.strokeStyle = det >= 0 ? "rgba(74,222,128,0.75)" : "rgba(248,113,113,0.8)";
+  ctx.lineWidth = 1.6;
+  ctx.fill(); ctx.stroke();
+  // area label at the centroid
+  const cx = (pts[0][0]+pts[1][0]+pts[2][0]+pts[3][0]) / 4;
+  const cy = (pts[0][1]+pts[1][1]+pts[2][1]+pts[3][1]) / 4;
+  ctx.font = "600 13px ui-monospace, Menlo, monospace";
+  ctx.fillStyle = det >= 0 ? "rgba(74,222,128,0.95)" : "rgba(248,113,113,0.95)";
+  ctx.textAlign = "center";
+  ctx.fillText(`area ${fmt(Math.abs(det))}${det < 0 ? " (flipped)" : ""}`, cx, cy);
+  ctx.restore();
+}
+
+function drawCircleImage(M) {
+  ctx.save();
+  // faint original unit circle
+  ctx.strokeStyle = "rgba(125,211,252,0.25)";
+  ctx.lineWidth = 1.2;
+  ctx.setLineDash([4, 5]);
+  ctx.beginPath();
+  const [ox, oy] = toScreen([0, 0]);
+  ctx.arc(ox, oy, S.scale, 0, 7);
+  ctx.stroke();
+  // its image: an ellipse (or a segment, if M is singular)
+  ctx.setLineDash([]);
+  ctx.strokeStyle = "rgba(125,211,252,0.85)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let i = 0; i <= 96; i++) {
+    const th = i / 96 * 2 * Math.PI;
+    const p = toScreen(LA.apply(M, [Math.cos(th), Math.sin(th)]));
+    i === 0 ? ctx.moveTo(...p) : ctx.lineTo(...p);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawKernelAndColumnSpace() {
+  const r = LA.rank(S.m);
+  if (r === 2) return;
+  const css = getComputedStyle(document.documentElement);
+  if (r === 1) {
+    const k = LA.kernelDir(S.m);
+    const c = LA.colDir(S.m);
+    if (k) { fullLine(k, css.getPropertyValue("--kernel").trim(), 2.2, [9, 7]); lineLabel(k, "null space", css.getPropertyValue("--kernel").trim()); }
+    if (c) { fullLine(c, css.getPropertyValue("--colspace").trim(), 2.2, [2, 5]); lineLabel(c, "column space", css.getPropertyValue("--colspace").trim(), 0.72); }
+  }
+  // rank 0: everything maps to the origin — analysis panel explains it
+}
+
+function lineLabel(dir, text, color, at = 0.82) {
+  // place the label toward the edge of the view, along dir
+  const reach = Math.min(W, H) / 2 / S.scale * at;
+  const p = toScreen([dir[0]*reach, dir[1]*reach]);
+  ctx.save();
+  ctx.font = "600 12px system-ui, sans-serif";
+  ctx.fillStyle = color;
+  ctx.textAlign = "center";
+  ctx.fillText(text, Math.min(Math.max(p[0], 50), W - 60), Math.min(Math.max(p[1] - 8, 16), H - 10));
+  ctx.restore();
+}
+
+function drawEigen() {
+  const eg = LA.eigen(S.m);
+  const css = getComputedStyle(document.documentElement);
+  const col = css.getPropertyValue("--eigen").trim();
+  if (eg.complex || eg.uniform) return; // nothing to draw (complex) / everything is one (uniform)
+  const M = curM();
+  for (const { l, v } of eg.vecs) {
+    fullLine(v, "rgba(192,132,252,0.5)", 1.6, [8, 7]);
+    // the eigenvector under the *current* animated matrix, so you can watch it stay on its line
+    const img = LA.apply(M, v);
+    arrow([0, 0], img, col, 2.6);
+    // λ label near the tip of the target-image vector
+    const tip = LA.apply(S.m, v);
+    const [tx, ty] = toScreen(LA.norm(tip) > 0.4 ? tip : v);
+    ctx.save();
+    ctx.font = "600 13px ui-monospace, Menlo, monospace";
+    ctx.fillStyle = col;
+    ctx.fillText(`λ=${fmt(l)}`, tx + 10, ty - 8);
+    ctx.restore();
+  }
+}
+
+function drawVectors(M) {
+  const css = getComputedStyle(document.documentElement);
+  const cv = css.getPropertyValue("--vvec").trim();
+  const img = LA.apply(M, S.v);
+
+  if (S.show.path) {
+    // Mv = v₁·(Mî) + v₂·(Mĵ): same coordinates, new basis vectors
+    const e1 = [M[0], M[2]], e2 = [M[1], M[3]];
+    const p1 = [e1[0]*S.v[0], e1[1]*S.v[0]];
+    const p2 = [p1[0] + e2[0]*S.v[1], p1[1] + e2[1]*S.v[1]];
+    line([0, 0], p1, "rgba(74,222,128,0.8)", 2, [6, 5]);
+    line(p1, p2, "rgba(248,113,113,0.8)", 2, [6, 5]);
+    ctx.save();
+    ctx.font = "600 12px ui-monospace, Menlo, monospace";
+    const m1 = toScreen([p1[0]/2, p1[1]/2]);
+    ctx.fillStyle = "rgba(74,222,128,0.95)";
+    ctx.fillText(`${fmt(S.v[0])}·î′`, m1[0] + 6, m1[1] - 6);
+    const m2 = toScreen([(p1[0]+p2[0])/2, (p1[1]+p2[1])/2]);
+    ctx.fillStyle = "rgba(248,113,113,0.95)";
+    ctx.fillText(`${fmt(S.v[1])}·ĵ′`, m2[0] + 6, m2[1] - 6);
+    ctx.restore();
+  }
+
+  // ghost of the original v once the animation departs from t=0
+  if (S.t > 0.02) {
+    ctx.save(); ctx.globalAlpha = 0.35;
+    arrow([0, 0], S.v, cv, 2);
+    ctx.restore();
+  }
+  arrow([0, 0], img, cv, 3.2, S.t < 0.02 ? "v" : "Mv");
+  handleDot(S.t > 0.02 ? img : S.v, cv);
+  if (S.t > 0.02) handleDot(S.v, "rgba(251,191,36,0.4)");
+}
+/* ================================================================
+   Vector View — interaction, UI wiring, presets, concept tours
+   ================================================================ */
+
+const $ = (id) => document.getElementById(id);
+const matInputs = [$("m00"), $("m01"), $("m10"), $("m11")];
+
+/* ---------------- matrix <-> inputs ---------------- */
+function readMatrixInputs() {
+  const vals = matInputs.map(el => parseFloat(el.value));
+  if (vals.some(x => !isFinite(x))) return;
+  S.m = vals;
+  S.t = 1; syncSlider();
+  refreshPanels();
+}
+function writeMatrixInputs() {
+  matInputs.forEach((el, i) => { el.value = fmt(S.m[i], 2); });
+}
+matInputs.forEach(el => el.addEventListener("input", readMatrixInputs));
+
+function setMatrix(m, animate = true) {
+  S.m = m.slice();
+  writeMatrixInputs();
+  if (animate) { S.t = 0; play(); } else { S.t = 1; }
+  syncSlider();
+  refreshPanels();
+}
+
+/* ---------------- animation ---------------- */
+const tSlider = $("tSlider"), tLabel = $("tLabel"), btnPlay = $("btnPlay");
+const ease = (u) => u < 0.5 ? 2*u*u : 1 - Math.pow(-2*u + 2, 2) / 2;
+
+let animStart = null, animFrom = 0;
+function play() {
+  // from wherever t is (restart from 0 if already at the end)
+  animFrom = S.t >= 0.999 ? 0 : S.t;
+  animStart = performance.now();
+  S.playing = true;
+  btnPlay.textContent = "❚❚ Pause";
+}
+function pause() {
+  S.playing = false;
+  btnPlay.textContent = "▶ Play";
+}
+btnPlay.addEventListener("click", () => (S.playing ? pause() : play()));
+
+tSlider.addEventListener("input", () => {
+  pause();
+  S.t = parseFloat(tSlider.value);
+  refreshPanels(false);
+});
+function syncSlider() {
+  tSlider.value = S.t;
+  tLabel.textContent = "t = " + S.t.toFixed(2);
+}
+
+const DURATION = 1700; // ms for a full 0 -> 1 sweep
+function tick(now) {
+  if (S.playing) {
+    const u = Math.min(1, (now - animStart) / (DURATION * (1 - animFrom)));
+    S.t = animFrom + (1 - animFrom) * ease(u);
+    if (u >= 1) { S.t = 1; pause(); }
+    syncSlider();
+  }
+  render();
+  requestAnimationFrame(tick);
+}
+
+/* ---------------- toolbar buttons ---------------- */
+$("btnIdentity").addEventListener("click", () => setMatrix([1, 0, 0, 1], false));
+$("btnTranspose").addEventListener("click", () => setMatrix(LA.transpose(S.m), true));
+$("btnInverse").addEventListener("click", () => {
+  const inv = LA.inverse(S.m);
+  if (inv) setMatrix(inv, true);
+});
+$("btnIterate").addEventListener("click", () => {
+  S.v = LA.apply(S.m, S.v);
+  refreshPanels(false);
+});
+$("btnResetV").addEventListener("click", () => { S.v = [1, 1.5]; refreshPanels(false); });
+
+/* ---------------- toggles ---------------- */
+const toggleMap = {
+  tgGrid: "grid", tgSquare: "square", tgEigen: "eigen", tgVec: "vec",
+  tgPath: "path", tgCircle: "circle", tgKernel: "kernel",
+};
+for (const [id, key] of Object.entries(toggleMap)) {
+  $(id).addEventListener("change", (e) => { S.show[key] = e.target.checked; updateLegend(); });
+}
+$("tgSnap").addEventListener("change", (e) => { S.snap = e.target.checked; });
+function syncToggles() {
+  for (const [id, key] of Object.entries(toggleMap)) $(id).checked = S.show[key];
+  $("tgSnap").checked = S.snap;
+  updateLegend();
+}
+
+/* ---------------- presets ---------------- */
+const PRESETS = [
+  { name: "Rotate 45°",  m: [Math.SQRT1_2, -Math.SQRT1_2, Math.SQRT1_2, Math.SQRT1_2] },
+  { name: "Rotate 90°",  m: [0, -1, 1, 0] },
+  { name: "Scale",       m: [2, 0, 0, 0.5] },
+  { name: "Shear",       m: [1, 1, 0, 1] },
+  { name: "Reflect x",   m: [1, 0, 0, -1] },
+  { name: "Reflect y=x", m: [0, 1, 1, 0] },
+  { name: "Project → x", m: [1, 0, 0, 0] },
+  { name: "Rank 1",      m: [1, 2, 0.5, 1] },
+  { name: "Symmetric",   m: [2, 1, 1, 2] },
+  { name: "Rotate + scale", m: [0.9, -0.7, 0.7, 0.9] },
+];
+const presetBox = $("presets");
+for (const p of PRESETS) {
+  const b = document.createElement("button");
+  b.textContent = p.name;
+  b.addEventListener("click", () => setMatrix(p.m));
+  presetBox.appendChild(b);
+}
+
+/* ---------------- analysis panel ---------------- */
+function refreshPanels(rewriteInputs = true) {
+  if (rewriteInputs) writeMatrixInputs();
+  syncSlider();
+
+  const m = S.m;
+  const det = LA.det(m), tr = LA.trace(m), rank = LA.rank(m);
+  const eg = LA.eigen(m);
+
+  const detCls = Math.abs(det) < 1e-9 ? "det-zero" : (det > 0 ? "det-pos" : "det-neg");
+  const detNote = Math.abs(det) < 1e-9
+    ? " — singular!"
+    : (det < 0 ? " — orientation flips" : "");
+
+  // characteristic polynomial λ² − (tr)λ + det
+  const trTerm = Math.abs(tr) < 1e-9 ? "" : (tr > 0 ? ` − ${fmt(tr)}λ` : ` + ${fmt(-tr)}λ`);
+  const dTerm = Math.abs(det) < 1e-9 ? "" : (det > 0 ? ` + ${fmt(det)}` : ` − ${fmt(-det)}`);
+  const charPoly = `λ²${trTerm}${dTerm}`;
+
+  let eigHtml;
+  if (eg.complex) {
+    const sgn = eg.im >= 0 ? "±" : "∓";
+    eigHtml = `<span class="lbl">eigenvalues</span> <span class="eig">λ = ${fmt(eg.re)} ${sgn} ${fmt(Math.abs(eg.im))}i</span><br>` +
+              `<span class="warn">complex — no real eigenvectors; M rotates every direction</span>`;
+  } else if (eg.uniform) {
+    eigHtml = `<span class="lbl">eigenvalues</span> <span class="eig">λ = ${fmt(eg.l1)} (repeated)</span><br>` +
+              `<span class="lbl">M = λI — <i>every</i> vector is an eigenvector</span>`;
+  } else if (eg.defective) {
+    const v = eg.vecs[0].v;
+    eigHtml = `<span class="lbl">eigenvalues</span> <span class="eig">λ = ${fmt(eg.l1)} (repeated)</span><br>` +
+              `<span class="lbl">eigenvector</span> <span class="eig">(${fmt(v[0])}, ${fmt(v[1])})</span> <span class="warn">only one — defective</span>`;
+  } else {
+    eigHtml = eg.vecs.map(({ l, v }) =>
+      `<span class="lbl">λ = </span><span class="eig">${fmt(l)}</span><span class="lbl"> along </span><span class="eig">(${fmt(v[0])}, ${fmt(v[1])})</span>`
+    ).join("<br>");
+  }
+
+  let rankNote = "";
+  if (rank === 1) rankNote = ` <span class="warn">— plane collapses to a line</span>`;
+  if (rank === 0) rankNote = ` <span class="warn">— everything maps to the origin</span>`;
+
+  $("analysis").innerHTML =
+    `<span class="lbl">det M = </span><span class="${detCls}">${fmt(det)}${detNote}</span><br>` +
+    `<span class="lbl">trace = </span>${fmt(tr)}<span class="lbl">&nbsp;&nbsp;rank = </span>${rank}${rankNote}<br>` +
+    `<span class="lbl">char. poly&nbsp; </span>${charPoly}<br>` + eigHtml;
+
+  // ---- vector panel ----
+  const img = LA.apply(m, S.v);
+  const inv = LA.inverse(m);
+  let coordLine;
+  if (inv) {
+    const c = LA.apply(inv, S.v);
+    coordLine = `<span class="lbl">v in basis {î′, ĵ′}:&nbsp;</span>(${fmt(c[0])}, ${fmt(c[1])})<br>` +
+                `<span class="lbl">(solves M·c = v, i.e. c = M⁻¹v)</span>`;
+  } else {
+    coordLine = `<span class="lbl">M is singular — the new "basis" doesn't span the plane</span>`;
+  }
+  $("vecInfo").innerHTML =
+    `<span class="lbl">v&nbsp; = </span><span class="v">(${fmt(S.v[0])}, ${fmt(S.v[1])})</span><br>` +
+    `<span class="lbl">Mv = </span><span class="v">(${fmt(img[0])}, ${fmt(img[1])})</span>` +
+    `<span class="lbl"> = ${fmt(S.v[0])}·(Mî) ${S.v[1] < 0 ? "−" : "+"} ${fmt(Math.abs(S.v[1]))}·(Mĵ)</span><br>` + coordLine;
+}
+
+/* ---------------- legend ---------------- */
+function updateLegend() {
+  const rows = [
+    ["var(--ihat)", "î → column 1 of M", true],
+    ["var(--jhat)", "ĵ → column 2 of M", true],
+    ["var(--vvec)", "v and Mv", S.show.vec],
+    ["var(--eigen)", "eigenvectors", S.show.eigen],
+    ["var(--kernel)", "null space", S.show.kernel && LA.rank(S.m) === 1],
+    ["var(--colspace)", "column space", S.show.kernel && LA.rank(S.m) === 1],
+  ];
+  $("legend").innerHTML = rows.filter(r => r[2])
+    .map(([c, t]) => `<div class="row"><span class="chip" style="background:${c}"></span>${t}</div>`)
+    .join("");
+}
+
+/* ---------------- pointer interaction ---------------- */
+const HIT = 14; // px
+function hitTest(sx, sy) {
+  const M = curM();
+  const near = (p) => { const s = toScreen(p); return Math.hypot(s[0]-sx, s[1]-sy) < HIT; };
+  if (S.show.vec) {
+    if (near(LA.apply(M, S.v))) return "vimg";
+    if (S.t > 0.02 && near(S.v)) return "v";
+  }
+  if (near([M[0], M[2]])) return "i";
+  if (near([M[1], M[3]])) return "j";
+  return "pan";
+}
+
+function snapPt(p) {
+  if (!S.snap) return [Math.round(p[0]*100)/100, Math.round(p[1]*100)/100];
+  return [Math.round(p[0]*2)/2, Math.round(p[1]*2)/2];
+}
+
+canvas.addEventListener("pointerdown", (e) => {
+  canvas.setPointerCapture(e.pointerId);
+  const r = canvas.getBoundingClientRect();
+  const sx = e.clientX - r.left, sy = e.clientY - r.top;
+  S.drag = hitTest(sx, sy);
+  if ((S.drag === "i" || S.drag === "j") && S.t < 0.999) {
+    // grabbing a basis vector snaps the animation to the fully applied state
+    pause(); S.t = 1; syncSlider();
+  }
+  S.dragLast = [sx, sy];
+  canvas.classList.add("dragging");
+});
+
+canvas.addEventListener("pointermove", (e) => {
+  const r = canvas.getBoundingClientRect();
+  const sx = e.clientX - r.left, sy = e.clientY - r.top;
+  if (!S.drag) {
+    canvas.style.cursor = hitTest(sx, sy) === "pan" ? "grab" : "pointer";
+    return;
+  }
+  const w = toWorld(sx, sy);
+  if (S.drag === "pan") {
+    S.origin[0] += sx - S.dragLast[0];
+    S.origin[1] += sy - S.dragLast[1];
+    S.dragLast = [sx, sy];
+  } else if (S.drag === "i") {
+    const p = snapPt(w); S.m[0] = p[0]; S.m[2] = p[1];
+    S.t = 1; writeMatrixInputs(); refreshPanels(false);
+  } else if (S.drag === "j") {
+    const p = snapPt(w); S.m[1] = p[0]; S.m[3] = p[1];
+    S.t = 1; writeMatrixInputs(); refreshPanels(false);
+  } else if (S.drag === "v") {
+    S.v = snapPt(w); refreshPanels(false);
+  } else if (S.drag === "vimg") {
+    // dragging the image Mv: move v so its image lands under the cursor
+    const inv = LA.inverse(curM());
+    S.v = inv ? snapPt(LA.apply(inv, w)) : S.v;
+    if (S.t < 0.02) S.v = snapPt(w); // at t=0 the image *is* v
+    refreshPanels(false);
+  }
+});
+
+canvas.addEventListener("pointerup", () => { S.drag = null; canvas.classList.remove("dragging"); });
+canvas.addEventListener("pointercancel", () => { S.drag = null; canvas.classList.remove("dragging"); });
+
+canvas.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const r = canvas.getBoundingClientRect();
+  const sx = e.clientX - r.left, sy = e.clientY - r.top;
+  const before = toWorld(sx, sy);
+  S.scale = Math.min(400, Math.max(18, S.scale * Math.exp(-e.deltaY * 0.0012)));
+  const after = toScreen(before);
+  S.origin[0] += sx - after[0];
+  S.origin[1] += sy - after[1];
+}, { passive: false });
+
+/* ---------------- concept tours ---------------- */
+const TOURS = [
+  {
+    title: "A matrix is where the basis lands",
+    body: `Every linear transformation is completely determined by what it does to
+           <b style="color:var(--ihat)">î</b> and <b style="color:var(--jhat)">ĵ</b> —
+           and those images are exactly the <b>columns of M</b>.
+           <p>Press <b>▶ Play</b> and watch the grid carry î to column 1 and ĵ to column 2.
+           Then <b>drag the arrow tips</b>: you are literally editing the matrix.</p>`,
+    setup: () => {
+      setMatrix([1, 1, 0, 1]); // shear
+      Object.assign(S.show, { grid: true, square: false, eigen: false, vec: false, path: false, circle: false, kernel: false });
+    },
+  },
+  {
+    title: "Mv keeps v's coordinates — in the new basis",
+    body: `The vector <code>v = (1, 1.5)</code> means "1 step along î, then 1.5 steps along ĵ."
+           After the transform, <code>Mv</code> is built from <i>the same recipe</i> with the new
+           basis vectors: <code>Mv = 1·(Mî) + 1.5·(Mĵ)</code>.
+           <p>The dashed staircase shows that recipe. Drag the <b>t slider</b> slowly back and
+           forth and watch the staircase bend with the grid while the coordinates never change. This is why matrix–vector
+           multiplication is just a change of where the basis points.</p>`,
+    setup: () => {
+      setMatrix([1, -0.5, 0.5, 1]);
+      S.v = [1, 1.5];
+      Object.assign(S.show, { grid: true, square: false, eigen: false, vec: true, path: true, circle: false, kernel: false });
+    },
+  },
+  {
+    title: "Determinant = area scaling factor",
+    body: `The green square has area 1. After the transform it becomes a parallelogram whose
+           area is exactly <b>|det M|</b>. Drag <b style="color:var(--ihat)">î</b> and
+           <b style="color:var(--jhat)">ĵ</b> around and watch the area readout track the determinant —
+           including hitting 0 the instant the two columns line up.
+           <p>Now load the <b>Reflect x</b> preset: the area stays 1 but det = −1 —
+           a negative determinant means <b>orientation flips</b> (the grid turns "inside out").</p>`,
+    setup: () => {
+      setMatrix([2, 0, 0, 0.5]);
+      Object.assign(S.show, { grid: true, square: true, eigen: false, vec: false, path: false, circle: false, kernel: false });
+    },
+  },
+  {
+    title: "Eigenvectors: the directions that don't turn",
+    body: `Most vectors get knocked off their original line. The purple dashed lines mark the
+           special directions that <b>only stretch</b> — the eigenvectors. Their stretch factors
+           are the eigenvalues.
+           <p>Play the animation: everything shears around, but vectors on the purple lines
+           slide along them. For this symmetric matrix, λ = 3 along (1,1) and λ = 1 along (1,−1).
+           Try dragging the basis vectors and watch the eigen-directions move.</p>`,
+    setup: () => {
+      setMatrix([2, 1, 1, 2]);
+      Object.assign(S.show, { grid: true, square: false, eigen: true, vec: false, path: false, circle: false, kernel: false });
+    },
+  },
+  {
+    title: "Null space: what gets crushed",
+    body: `This matrix has det = 0, so it squashes the whole plane onto a line — the
+           <b style="color:var(--colspace)">column space</b>. Everything on the
+           <b style="color:var(--kernel)">null space</b> line gets crushed to the origin.
+           <p>Drag <b style="color:var(--vvec)">v</b> onto the rose dashed line and watch Mv vanish.
+           Rank 1 = one dimension survives; the other dimension is the price, since
+           rank + nullity = 2.</p>`,
+    setup: () => {
+      setMatrix([1, 2, 0.5, 1]);
+      S.v = [2, -1];
+      Object.assign(S.show, { grid: true, square: true, eigen: false, vec: true, path: false, circle: false, kernel: true });
+    },
+  },
+  {
+    title: "Complex eigenvalues: rotation in disguise",
+    body: `This matrix rotates while it scales, so <i>no</i> real direction stays on its own line —
+           the eigenvalues are complex: λ = 0.9 ± 0.7i. The magnitude |λ| ≈ 1.14 tells you each
+           application grows vectors ~14%, and the angle tells you how much they turn.
+           <p>Click <b>v ← Mv</b> repeatedly and watch v spiral outward. Try the unit-circle
+           toggle to see circles map to tilted ellipses.</p>`,
+    setup: () => {
+      setMatrix([0.9, -0.7, 0.7, 0.9]);
+      S.v = [1.5, 0];
+      Object.assign(S.show, { grid: true, square: false, eigen: true, vec: true, path: false, circle: true, kernel: false });
+    },
+  },
+  {
+    title: "Power iteration: eigenvectors attract",
+    body: `Click <b>v ← Mv (iterate)</b> again and again. Each click multiplies by M, and v swings
+           toward the eigenvector with the <b>largest |λ|</b> (here λ = 3 along (1,1)) — the dominant
+           direction wins because its component gets multiplied by 3 each round while the other
+           only survives ×1.
+           <p>This is exactly how power iteration computes eigenvectors numerically, and it's the
+           germ of PageRank. (Zoom out with the scroll wheel — v grows fast!)</p>`,
+    setup: () => {
+      setMatrix([2, 1, 1, 2], false);
+      S.v = [1.5, -0.5];
+      Object.assign(S.show, { grid: false, square: false, eigen: true, vec: true, path: false, circle: false, kernel: false });
+    },
+  },
+];
+
+const tourBox = $("tourbtns"), tourCard = $("tourCard");
+TOURS.forEach((tour, i) => {
+  const b = document.createElement("button");
+  b.innerHTML = `<span class="num">${i + 1}</span>${tour.title}`;
+  b.addEventListener("click", () => {
+    tour.setup();
+    syncToggles();
+    refreshPanels();
+    tourCard.className = "show";
+    tourCard.innerHTML = `<button class="close" title="close">✕</button><h3>${tour.title}</h3><p>${tour.body}</p>`;
+    tourCard.querySelector(".close").addEventListener("click", () => { tourCard.className = ""; });
+    tourCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+  tourBox.appendChild(b);
+});
+
+/* ---------------- boot ---------------- */
+resize();
+syncToggles();
+refreshPanels();
+setMatrix([2, 1, 1, 2]);   // opening demo: symmetric matrix, animated on load
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
