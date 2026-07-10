@@ -1,20 +1,5 @@
 # Vector View
 
-> We're vibe coding!
->
-> I want to create a program called Vector View that helps students learning linear algebra. It should provide an
-> intuitive interface that allows someone to explore vector transformations that addresses things like the relationship
-> between matrix transforms and coordinate systems, basis vectors, eigenvectors, null spaces...Whatever concepts you
-> think are important and can be incorporated into a easy-to-use UI. Your audience is a student in an upper-level
-> undergraduate class, so you can assume that they understand the concepts but still haven't mastered them.
->
-> Vibe means vibe! You do all the work, decide on the software framework, how to present it, how to code it, write the
-> documentation, everything. Do the work entirely in this project's folder. I don't want to be involved in the decision
-> making process at all. If you need me to perform some manual step like logging in somewhere or running a shell script I
-> can do that, but otherwise I do not want to be involved.
->
-> Any questions?
-
 An interactive playground for building intuition about 2D linear transformations, aimed at upper-level undergraduates who
 know the definitions but are still developing a feel for them.
 
